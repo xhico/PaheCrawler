@@ -214,7 +214,6 @@ def multi(download_page_url, counter=0, json_data=None):
     final_url = click_download_btn(download_page_url, btn_elem)
     logging.info(f"{final_url}")
     logger.info("--------------------")
-    final_url = f"{counter}"
 
     # Add to json data
     json_data = {} if json_data is None else json_data
