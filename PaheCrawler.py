@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import re
-import sys
 import time
 import traceback
 
@@ -158,12 +157,34 @@ def multi(download_page_url, counter=0, json_data=None):
         browser.execute_script(f"arguments[0].id = 'pane_{index}';", pane_elem)
         browser.execute_script("arguments[0].style.display = 'block';", pane_elem)
 
-    # Add span tag to titles
-    for idx, box_elem in enumerate(browser.find_elements(By.CLASS_NAME, "box-inner-block")):
-        inner_html = box_elem.get_attribute("innerHTML").split("<br>")
-        texts = [line.strip() for line in inner_html if line.strip() and "<" not in line and "&nbsp" not in line]
-        for text in texts:
-            browser.execute_script(f"arguments[0].outerHTML = arguments[0].outerHTML.replace('{text}', '<span>{text}</span>')", browser.find_elements(By.CLASS_NAME, "box-inner-block")[idx])
+    # Add span tags to innerText
+    for box_elem in browser.find_elements(By.CLASS_NAME, "box-inner-block"):
+        browser.execute_script("""
+        var element = arguments[0];
+        var childNodes = element.childNodes;
+        for(var i=0; i<childNodes.length; i++) {
+            var node = childNodes[i];
+            if (node.nodeType === 3 && node.nodeValue.trim() !== "") {
+                var span = document.createElement('span');
+                span.textContent = node.nodeValue;
+                element.insertBefore(span, node);
+                element.removeChild(node);
+            }
+        }
+        """, box_elem)
+
+        # Replace all <b> tags with <span> tags using JavaScript
+        browser.execute_script("""
+            var elements = document.getElementsByTagName('b');
+            for (var i = 0; i < elements.length; i++) {
+                var span = document.createElement('span');
+                span.innerHTML = elements[i].innerHTML;
+                elements[i].parentNode.replaceChild(span, elements[i]);
+            }
+        """, box_elem)
+
+        # Merge consecutive <span> elements
+        browser.execute_script("arguments[0].innerHTML = arguments[0].innerHTML.replaceAll('</span><span>',' ')", box_elem)
 
     # Find all download button elements
     btn_elems = browser.find_elements(By.CLASS_NAME, "shortc-button")
@@ -175,21 +196,33 @@ def multi(download_page_url, counter=0, json_data=None):
     # Get Download Pane Text
     pane_elem_id = int(btn_elem.find_element(By.XPATH, "../../..").get_attribute("id").replace("pane_", ""))
     pane_text = browser.find_element(By.CLASS_NAME, "tabs-nav").find_elements(By.TAG_NAME, "li")[pane_elem_id].text
+    pane_text = pane_text.replace("|", "-").strip()
 
-    # Find the parent element of the button and extract box title and type title
+    # Find Box Title
+    box_title = btn_elem.find_element(By.XPATH, "..").find_elements(By.XPATH, "*")[1].text
+    box_title = box_title.replace("|", "-").strip()
+    box_title = box_title.replace(f"{pane_text} – ", "").strip()
+
+    # Get Download Format Text
     download_format = btn_elem.find_element(By.XPATH, "preceding::span[1]").text
+    download_format = download_format.replace("|", "-").strip()
 
     # Log box title and type title
-    logging.info(f"{counter + 1}/{btn_elems_length} ({int((counter + 1) / btn_elems_length * 100)}) | {pane_text} | {download_format} - {btn_elem.text}")
+    logging.info(f"{counter + 1}/{btn_elems_length} ({int((counter + 1) / btn_elems_length * 100)}) | {pane_text} | {box_title} | {download_format} - {btn_elem.text}")
 
     # Click the download button
     final_url = click_download_btn(download_page_url, btn_elem)
     logging.info(f"{final_url}")
     logger.info("--------------------")
+    final_url = f"{counter}"
 
-    # # Add to json data
+    # Add to json data
     json_data = {} if json_data is None else json_data
-    json_data[pane_text] = json_data.get(pane_text, []) + [final_url]
+    if pane_text not in json_data:
+        json_data[pane_text] = {}
+    if box_title not in json_data[pane_text]:
+        json_data[pane_text][box_title] = {}
+    json_data[pane_text][box_title][download_format] = json_data[pane_text][box_title].get(download_format, []) + [final_url]
 
     # If there are more buttons to click, recursively call the function with the next counter
     if counter < btn_elems_length - 1:
@@ -209,8 +242,9 @@ def main():
     """
 
     # Visit Download Page
-    download_page_url = sys.argv[1]
-    # download_page_url = "https://pahe.ink/shogun-season-1/"
+    # download_page_url = sys.argv[1]
+    download_page_url = "https://pahe.ink/shogun-season-1/"
+    # download_page_url = "https://pahe.ink/hawaii-five-0-season-8-10-complete-bluray-720p/"
     logger.info(f"URL - {download_page_url}")
     browser.get(download_page_url)
     page_title = browser.title
