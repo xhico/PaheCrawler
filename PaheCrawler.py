@@ -153,8 +153,17 @@ def multi(download_page_url, counter=0, json_data=None):
         json_data (dict): The json data of the download buttons
     """
 
-    # Make all 'pane' elements visible
-    [browser.execute_script("arguments[0].style.display = 'block';", pane_elem) for pane_elem in browser.find_elements(By.CLASS_NAME, "pane")]
+    # Make all 'pane' elements visible && Add ID
+    for index, pane_elem in enumerate(browser.find_elements(By.CLASS_NAME, "pane")):
+        browser.execute_script(f"arguments[0].id = 'pane_{index}';", pane_elem)
+        browser.execute_script("arguments[0].style.display = 'block';", pane_elem)
+
+    # Add span tag to titles
+    for idx, box_elem in enumerate(browser.find_elements(By.CLASS_NAME, "box-inner-block")):
+        inner_html = box_elem.get_attribute("innerHTML").split("<br>")
+        texts = [line.strip() for line in inner_html if line.strip() and "<" not in line and "&nbsp" not in line]
+        for text in texts:
+            browser.execute_script(f"arguments[0].outerHTML = arguments[0].outerHTML.replace('{text}', '<span>{text}</span>')", browser.find_elements(By.CLASS_NAME, "box-inner-block")[idx])
 
     # Find all download button elements
     btn_elems = browser.find_elements(By.CLASS_NAME, "shortc-button")
@@ -163,22 +172,24 @@ def multi(download_page_url, counter=0, json_data=None):
     # Select the button to click based on the counter
     btn_elem = btn_elems[counter]
 
+    # Get Download Pane Text
+    pane_elem_id = int(btn_elem.find_element(By.XPATH, "../../..").get_attribute("id").replace("pane_", ""))
+    pane_text = browser.find_element(By.CLASS_NAME, "tabs-nav").find_elements(By.TAG_NAME, "li")[pane_elem_id].text
+
     # Find the parent element of the button and extract box title and type title
-    box_elem = btn_elem.find_element(By.XPATH, "..")
-    box_title = box_elem.find_element(By.CSS_SELECTOR, "span > b").text
-    type_title = btn_elem.find_element(By.XPATH, "preceding::b[1]").text
+    download_format = btn_elem.find_element(By.XPATH, "preceding::span[1]").text
 
     # Log box title and type title
-    logging.info(f"{counter + 1}/{btn_elems_length} ({int((counter + 1) / btn_elems_length * 100)}) | {box_title} - {type_title} - {btn_elem.text}")
+    logging.info(f"{counter + 1}/{btn_elems_length} ({int((counter + 1) / btn_elems_length * 100)}) | {pane_text} | {download_format} - {btn_elem.text}")
 
     # Click the download button
     final_url = click_download_btn(download_page_url, btn_elem)
     logging.info(f"{final_url}")
     logger.info("--------------------")
 
-    # Add to json data
+    # # Add to json data
     json_data = {} if json_data is None else json_data
-    json_data[box_title] = json_data.get(box_title, []) + [final_url]
+    json_data[pane_text] = json_data.get(pane_text, []) + [final_url]
 
     # If there are more buttons to click, recursively call the function with the next counter
     if counter < btn_elems_length - 1:
@@ -199,6 +210,7 @@ def main():
 
     # Visit Download Page
     download_page_url = sys.argv[1]
+    # download_page_url = "https://pahe.ink/shogun-season-1/"
     logger.info(f"URL - {download_page_url}")
     browser.get(download_page_url)
     page_title = browser.title
