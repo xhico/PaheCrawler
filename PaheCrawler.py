@@ -74,6 +74,70 @@ def process_spacetica():
             return btn_elem.get_attribute("href") or btn_elem.find_element(By.XPATH, "..").get_attribute("href")
 
 
+def get_download_titles(download_page_url, counter):
+    # Switch to the newly opened window
+    browser.get(download_page_url)
+
+    # Make all 'pane' elements visible && Add ID
+    for index, pane_elem in enumerate(browser.find_elements(By.CLASS_NAME, "pane")):
+        browser.execute_script(f"arguments[0].id = 'pane_{index}';", pane_elem)
+        browser.execute_script("arguments[0].style.display = 'block';", pane_elem)
+
+    # Add span tags to innerText
+    for box_elem in browser.find_elements(By.CLASS_NAME, "box-inner-block"):
+        browser.execute_script("""
+        var element = arguments[0];
+        var childNodes = element.childNodes;
+        for(var i=0; i<childNodes.length; i++) {
+            var node = childNodes[i];
+            if (node.nodeType === 3 && node.nodeValue.trim() !== "") {
+                var span = document.createElement('span');
+                span.textContent = node.nodeValue;
+                element.insertBefore(span, node);
+                element.removeChild(node);
+            }
+        }
+        """, box_elem)
+
+        # Replace all <b> tags with <span> tags using JavaScript
+        browser.execute_script("""
+            var elements = document.getElementsByTagName('b');
+            for (var i = 0; i < elements.length; i++) {
+                var span = document.createElement('span');
+                span.innerHTML = elements[i].innerHTML;
+                elements[i].parentNode.replaceChild(span, elements[i]);
+            }
+        """, box_elem)
+
+        # Merge consecutive <span> elements
+        browser.execute_script("arguments[0].innerHTML = arguments[0].innerHTML.replaceAll('</span><span>',' ')", box_elem)
+
+    # Find all download button elements
+    btn_elems = browser.find_elements(By.CLASS_NAME, "shortc-button")
+
+    # Select the button to click based on the counter
+    btn_elem = btn_elems[counter]
+
+    # Get Download Pane Text
+    pane_elem_id = int(btn_elem.find_element(By.XPATH, "../../..").get_attribute("id").replace("pane_", ""))
+    pane_text = browser.find_element(By.CLASS_NAME, "tabs-nav").find_elements(By.TAG_NAME, "li")[pane_elem_id].text
+    pane_text = pane_text.replace("|", "-").strip()
+
+    # Find Box Title
+    box_title = btn_elem.find_element(By.XPATH, "..").find_elements(By.XPATH, "*")[1].text
+    box_title = box_title.replace("|", "-").strip()
+    box_title = box_title.replace(f"{pane_text} – ", "").strip()
+
+    # Get Download Format Text
+    download_format = btn_elem.find_element(By.XPATH, "preceding::span[1]").text
+    download_format = download_format.replace("|", "-").strip()
+
+    # Navigate to the download page
+    browser.get(download_page_url)
+
+    return pane_text, box_title, download_format
+
+
 def click_download_btn(download_page_url, btn):
     """
     Simulates a click on a download button, processes Intercelestial and Spacetica pages, and navigates to a download page.
@@ -152,39 +216,8 @@ def multi(download_page_url, counter=0, json_data=None):
         json_data (dict): The json data of the download buttons
     """
 
-    # Make all 'pane' elements visible && Add ID
-    for index, pane_elem in enumerate(browser.find_elements(By.CLASS_NAME, "pane")):
-        browser.execute_script(f"arguments[0].id = 'pane_{index}';", pane_elem)
-        browser.execute_script("arguments[0].style.display = 'block';", pane_elem)
-
-    # Add span tags to innerText
-    for box_elem in browser.find_elements(By.CLASS_NAME, "box-inner-block"):
-        browser.execute_script("""
-        var element = arguments[0];
-        var childNodes = element.childNodes;
-        for(var i=0; i<childNodes.length; i++) {
-            var node = childNodes[i];
-            if (node.nodeType === 3 && node.nodeValue.trim() !== "") {
-                var span = document.createElement('span');
-                span.textContent = node.nodeValue;
-                element.insertBefore(span, node);
-                element.removeChild(node);
-            }
-        }
-        """, box_elem)
-
-        # Replace all <b> tags with <span> tags using JavaScript
-        browser.execute_script("""
-            var elements = document.getElementsByTagName('b');
-            for (var i = 0; i < elements.length; i++) {
-                var span = document.createElement('span');
-                span.innerHTML = elements[i].innerHTML;
-                elements[i].parentNode.replaceChild(span, elements[i]);
-            }
-        """, box_elem)
-
-        # Merge consecutive <span> elements
-        browser.execute_script("arguments[0].innerHTML = arguments[0].innerHTML.replaceAll('</span><span>',' ')", box_elem)
+    # Get Download Titles
+    pane_text, box_title, download_format = get_download_titles(download_page_url, counter)
 
     # Find all download button elements
     btn_elems = browser.find_elements(By.CLASS_NAME, "shortc-button")
@@ -192,20 +225,6 @@ def multi(download_page_url, counter=0, json_data=None):
 
     # Select the button to click based on the counter
     btn_elem = btn_elems[counter]
-
-    # Get Download Pane Text
-    pane_elem_id = int(btn_elem.find_element(By.XPATH, "../../..").get_attribute("id").replace("pane_", ""))
-    pane_text = browser.find_element(By.CLASS_NAME, "tabs-nav").find_elements(By.TAG_NAME, "li")[pane_elem_id].text
-    pane_text = pane_text.replace("|", "-").strip()
-
-    # Find Box Title
-    box_title = btn_elem.find_element(By.XPATH, "..").find_elements(By.XPATH, "*")[1].text
-    box_title = box_title.replace("|", "-").strip()
-    box_title = box_title.replace(f"{pane_text} – ", "").strip()
-
-    # Get Download Format Text
-    download_format = btn_elem.find_element(By.XPATH, "preceding::span[1]").text
-    download_format = download_format.replace("|", "-").strip()
 
     # Log box title and type title
     logging.info(f"{counter + 1}/{btn_elems_length} ({int((counter + 1) / btn_elems_length * 100)}) | {pane_text} | {box_title} | {download_format} - {btn_elem.text}")
@@ -281,6 +300,6 @@ if __name__ == '__main__':
     except Exception as ex:
         logger.error(traceback.format_exc())
     finally:
-        browser.close()
+        browser.quit()
         logger.info("Close")
         logger.info("End")
