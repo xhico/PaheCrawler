@@ -34,6 +34,16 @@ def close_all_except_last():
     browser.switch_to.window(browser.window_handles[-1])
 
 
+def close_all():
+    """
+    Close all tabs
+    """
+
+    for handle in browser.window_handles:
+        browser.switch_to.window(handle)
+        browser.close()
+
+
 def process_intercelestial():
     """
     Process Intercelestial.
