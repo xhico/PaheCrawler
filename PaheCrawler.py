@@ -198,7 +198,7 @@ def single(download_page_url, counter=0, json_data=None):
     box_title = btn_elem.find_element(By.XPATH, "preceding::b[1]").text
 
     # Log box title and type title
-    logging.info(f"{counter + 1}/{btn_elems_length} ({int((counter + 1) / btn_elems_length * 100)}) | {box_title} - {btn_elem.text}")
+    logging.info(f"{counter + 1}/{btn_elems_length} ({int((counter + 1) / btn_elems_length * 100)} %) | {box_title} - {btn_elem.text}")
 
     # Click the download button
     final_url = click_download_btn(download_page_url, btn_elem)
@@ -237,7 +237,7 @@ def multi(download_page_url, counter=0, json_data=None):
     btn_elem = btn_elems[counter]
 
     # Log box title and type title
-    logging.info(f"{counter + 1}/{btn_elems_length} ({int((counter + 1) / btn_elems_length * 100)}) | {pane_text} | {box_title} | {download_format} - {btn_elem.text}")
+    logging.info(f"{counter + 1}/{btn_elems_length} ({int((counter + 1) / btn_elems_length * 100)} %) | {pane_text} | {box_title} | {download_format} - {btn_elem.text}")
 
     # Click the download button
     final_url = click_download_btn(download_page_url, btn_elem)
